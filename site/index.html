@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patras PM Network — Sensor QC</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root{
+    --ink:#1b2420; --ink-soft:#4b564f; --ink-faint:#8b958e;
+    --paper:#f4f1e9; --panel:#ffffff; --line:#d9d4c4;
+    --ok:#2f6d4f; --ok-bg:#e3ede2;
+    --warn:#8a5a12; --warn-bg:#f4e6c9;
+    --fault:#8a2f24; --fault-bg:#f3ddd6;
+    --off:#5b5f66; --off-bg:#e5e4df;
+    --accent:#2f6d4f;
+    --mono: "IBM Plex Mono","SF Mono",Menlo,Consolas,monospace;
+    --sans: "IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--sans); line-height:1.5;
+  }
+  header{
+    padding:2.2rem 2rem 1.4rem; border-bottom:1px solid var(--line);
+  }
+  header .eyebrow{
+    font-family:var(--mono); font-size:12px; color:var(--ink-faint);
+    letter-spacing:0.02em;
+  }
+  header h1{
+    margin:0.3rem 0 0.2rem; font-size:1.9rem; font-weight:600;
+    letter-spacing:-0.01em;
+  }
+  header p{margin:0; color:var(--ink-soft); font-size:0.95rem; max-width:60ch;}
+  .meta-row{
+    display:flex; gap:1.5rem; align-items:center; margin-top:1rem;
+    font-family:var(--mono); font-size:12.5px; color:var(--ink-soft);
+    flex-wrap:wrap;
+  }
+  select{
+    font-family:var(--mono); font-size:12.5px; background:var(--panel);
+    border:1px solid var(--line); border-radius:4px; padding:4px 8px; color:var(--ink);
+  }
+  main{max-width:1180px; margin:0 auto; padding:1.6rem 2rem 4rem;}
+
+  .counts{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:1.6rem;
+  }
+  .count-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:6px;
+    padding:0.9rem 1rem;
+  }
+  .count-card .n{font-family:var(--mono); font-size:1.7rem; font-weight:600;}
+  .count-card .label{font-size:12px; color:var(--ink-soft); margin-top:2px;}
+  .count-card.OK{border-left:4px solid var(--ok);}
+  .count-card.WARNING{border-left:4px solid var(--warn);}
+  .count-card.FAULTY{border-left:4px solid var(--fault);}
+  .count-card.OFFLINE{border-left:4px solid var(--off);}
+
+  #map{
+    height:340px; border-radius:6px; border:1px solid var(--line); margin-bottom:1.8rem;
+  }
+
+  table{width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); border-radius:6px; overflow:hidden;}
+  thead th{
+    text-align:left; font-family:var(--mono); font-size:10.5px; text-transform:uppercase;
+    letter-spacing:0.04em; color:var(--ink-faint); font-weight:500;
+    padding:10px 12px; border-bottom:1px solid var(--line); background:#faf8f2;
+  }
+  tbody td{padding:10px 12px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr{cursor:pointer;}
+  tbody tr:hover{background:#faf8f2;}
+  thead th:nth-child(2), tbody td:nth-child(2){padding-right:4px;}
+  thead th:nth-child(3), tbody td:nth-child(3){padding-left:4px; padding-right:4px;}
+  thead th:nth-child(4), tbody td:nth-child(4){padding-left:4px; padding-right:4px;}
+  thead th:nth-child(5), tbody td:nth-child(5){padding-left:4px; padding-right:4px;}
+  thead th:nth-child(6), tbody td:nth-child(6){padding-left:4px; padding-right:4px;}
+  thead th:nth-child(9), tbody td:nth-child(9){padding-right:4px;}
+  thead th:nth-child(10), tbody td:nth-child(10){padding-left:4px;}
+  thead th:nth-child(8), tbody td:nth-child(8){padding-right:4px; padding-left:4px;}
+  thead th:nth-child(9), tbody td:nth-child(9){padding-left:4px;}
+  thead th:nth-child(7), tbody td:nth-child(7){padding-left:4px; padding-right:4px;}
+  .status-pill{
+    display:inline-block; font-family:var(--mono); font-size:10.5px; font-weight:600;
+    padding:3px 8px; border-radius:3px; letter-spacing:0.02em;
+  }
+  .status-pill.OK{color:var(--ok); background:var(--ok-bg);}
+  .status-pill.WARNING{color:var(--warn); background:var(--warn-bg);}
+  .status-pill.FAULTY{color:var(--fault); background:var(--fault-bg);}
+  .status-pill.OFFLINE{color:var(--off); background:var(--off-bg);}
+  .num{font-family:var(--mono); font-size:12px; color:var(--ink-soft); white-space:nowrap;}
+  .num.stale{color:var(--fault); font-weight:600;}
+
+  .view-toggle{display:flex; gap:6px;}
+  .view-toggle button{
+    font-family:var(--mono); font-size:12.5px; background:var(--panel);
+    border:1px solid var(--line); border-radius:4px; padding:5px 12px; color:var(--ink-soft);
+    cursor:pointer;
+  }
+  .view-toggle button.active{background:var(--ink); color:var(--paper); border-color:var(--ink);}
+
+  .detail{
+    margin-top:1.8rem; background:var(--panel); border:1px solid var(--line);
+    border-radius:6px; padding:1.4rem 1.6rem; display:none;
+  }
+  .detail.open{display:block;}
+  .detail h2{margin:0 0 0.2rem; font-size:1.2rem;}
+  .detail .sub{font-family:var(--mono); font-size:12px; color:var(--ink-soft); margin-bottom:1rem;}
+  .detail .reasons{font-size:13.5px; color:var(--ink-soft); margin-bottom:1rem;}
+  .detail .reasons li{margin-bottom:2px;}
+  .chart-grid{display:grid; grid-template-columns:1fr 1fr; gap:1.4rem;}
+  .chart-box{position:relative; height:260px;}
+  .chart-title{font-family:var(--mono); font-size:11px; color:var(--ink-faint); text-transform:uppercase; margin-bottom:6px;}
+  .zoom-reset-btn{
+    font-family:var(--mono); font-size:10px; text-transform:none; background:var(--panel);
+    border:1px solid var(--line); border-radius:3px; padding:2px 7px; color:var(--ink-soft);
+    cursor:pointer;
+  }
+  .zoom-reset-btn:hover{background:#faf8f2;}
+  footer{
+    max-width:1180px; margin:0 auto; padding:0 2rem 3rem; font-size:12px; color:var(--ink-faint);
+    font-family:var(--mono);
+  }
+  @media (max-width:760px){
+    .counts{grid-template-columns:repeat(2,1fr);}
+    .chart-grid{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">PATRAS AIR QUALITY MONITORING NETWORK</div>
+  <h1>Sensor QC dashboard</h1>
+  <p>Daily channel-A vs channel-B agreement check for every low-cost PM node in the network, plus offline detection. Built on PurpleAir dual-laser sensors.</p>
+  <div class="meta-row">
+    <span class="view-toggle">
+      <button id="btn-day" class="active">Last day</button>
+      <button id="btn-week">Last 7 days</button>
+    </span>
+    <span id="window-label"></span>
+    <span id="generated-at"></span>
+  </div>
+</header>
+
+<main>
+  <div class="counts" id="counts"></div>
+  <div id="map"></div>
+
+  <div style="overflow-x:auto;">
+  <table>
+    <thead>
+      <tr>
+        <th>Status</th>
+        <th>Sensor</th>
+        <th>R² (PM2.5)</th>
+        <th>Slope (PM2.5)</th>
+        <th>RMSE (PM2.5)</th>
+        <th>Mean PM1</th>
+        <th>Mean PM2.5</th>
+        <th>Mean PM10</th>
+        <th>Completeness</th>
+        <th>Last seen</th>
+      </tr>
+    </thead>
+    <tbody id="table-body"></tbody>
+  </table>
+  </div>
+
+  <div class="detail" id="detail">
+    <h2 id="detail-name"></h2>
+    <div class="sub" id="detail-sub"></div>
+    <ul class="reasons" id="detail-reasons"></ul>
+    <div class="chart-grid">
+      <div>
+        <div class="chart-title" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>Channel A vs Channel B (today)</span>
+          <span style="display:flex; align-items:center; gap:8px;">
+            <select id="fraction-select" style="font-size:11px;">
+              <option value="pm1_0">PM1.0</option>
+              <option value="pm2_5" selected>PM2.5</option>
+              <option value="pm10_0">PM10</option>
+            </select>
+            <button class="zoom-reset-btn" onclick="resetZoomFor('scatter-chart')">Reset zoom</button>
+          </span>
+        </div>
+        <div class="chart-box"><canvas id="scatter-chart"></canvas></div>
+      </div>
+      <div>
+        <div class="chart-title" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>PM2.5 time series</span>
+          <button class="zoom-reset-btn" onclick="resetZoomFor('ts-chart')">Reset zoom</button>
+        </div>
+        <div class="chart-box"><canvas id="ts-chart"></canvas></div>
+      </div>
+    </div>
+    <div id="neighbor-section" style="display:none; margin-top:1.4rem; padding-top:1.4rem; border-top:1px solid var(--line);">
+      <div class="chart-title" style="margin-bottom:10px;">Compared to nearest sensors (same fraction, both channels) — does the surrounding network see the same air? Scroll to zoom, drag to pan, shift+drag to zoom into a box.</div>
+      <div class="chart-grid">
+        <div>
+          <div class="chart-title" style="display:flex; justify-content:space-between; align-items:center;">
+            <span>Channel A & B time series — this sensor + nearby</span>
+            <button class="zoom-reset-btn" onclick="resetZoomFor('neighbor-ts-chart')">Reset zoom</button>
+          </div>
+          <div class="chart-box"><canvas id="neighbor-ts-chart"></canvas></div>
+        </div>
+        <div>
+          <div class="chart-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+            <span>Cross-correlation explorer</span>
+            <span style="display:flex; gap:4px; align-items:center; font-size:11px;">
+              <select id="corr-x-select" style="font-size:11px;"></select>
+              <span style="color:var(--ink-faint);">vs</span>
+              <select id="corr-y-select" style="font-size:11px;"></select>
+              <button class="zoom-reset-btn" id="corr-box-exclude-toggle">Box exclude: off</button>
+              <button class="zoom-reset-btn" id="corr-clear-exclusions">Clear exclusions</button>
+              <button class="zoom-reset-btn" onclick="resetZoomFor('neighbor-corr-chart')">Reset zoom</button>
+            </span>
+          </div>
+          <div class="chart-box"><canvas id="neighbor-corr-chart"></canvas></div>
+          <div id="corr-stats" class="num" style="margin-top:4px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Data via the PurpleAir API · thresholds configurable in config.json · generated by a daily scheduled job
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
+<script>
+const STATUS_COLOR = {OK:'#2f6d4f', WARNING:'#8a5a12', FAULTY:'#8a2f24', OFFLINE:'#5b5f66'};
+
+const ZOOM_OPTS = {
+  pan: {enabled: true, mode: 'xy'},
+  zoom: {
+    wheel: {enabled: true},
+    pinch: {enabled: true},
+    drag: {enabled: true, backgroundColor: 'rgba(47,109,79,0.15)', modifierKey: 'shift'},
+    mode: 'xy'
+  }
+};
+
+function resetZoomFor(canvasId) {
+  const chart = Chart.getChart(canvasId);
+  if (chart && chart.resetZoom) chart.resetZoom();
+}
+
+function setupBoxExclude(canvas, chartGetter, excludedTimestamps, allPairedGetter, onChange, isActiveGetter) {
+  if (canvas._boxHandlers) {
+    canvas.removeEventListener('mousedown', canvas._boxHandlers.down);
+    window.removeEventListener('mousemove', canvas._boxHandlers.move);
+    window.removeEventListener('mouseup', canvas._boxHandlers.up);
+  }
+  let dragging = false, startPx = null, overlay = null;
+
+  function ensureOverlay() {
+    if (overlay && overlay.isConnected) return overlay;
+    overlay = document.createElement('div');
+    Object.assign(overlay.style, {
+      position:'absolute', border:'1px dashed #8a2f24', background:'rgba(138,47,36,0.12)',
+      pointerEvents:'none', display:'none', zIndex:5
+    });
+    canvas.parentElement.style.position = 'relative';
+    canvas.parentElement.appendChild(overlay);
+    return overlay;
+  }
+
+  function down(e) {
+    if (!isActiveGetter()) return;
+    const rect = canvas.getBoundingClientRect();
+    startPx = {x: e.clientX - rect.left, y: e.clientY - rect.top};
+    dragging = true;
+    const ov = ensureOverlay();
+    Object.assign(ov.style, {left:startPx.x+'px', top:startPx.y+'px', width:'0px', height:'0px', display:'block'});
+  }
+  function move(e) {
+    if (!dragging) return;
+    const rect = canvas.getBoundingClientRect();
+    const curPx = {x: e.clientX - rect.left, y: e.clientY - rect.top};
+    const x = Math.min(startPx.x, curPx.x), y = Math.min(startPx.y, curPx.y);
+    const w = Math.abs(curPx.x - startPx.x), h = Math.abs(curPx.y - startPx.y);
+    Object.assign(overlay.style, {left:x+'px', top:y+'px', width:w+'px', height:h+'px'});
+  }
+  function up(e) {
+    if (!dragging) return;
+    dragging = false;
+    if (overlay) overlay.style.display = 'none';
+    const rect = canvas.getBoundingClientRect();
+    const endPx = {x: e.clientX - rect.left, y: e.clientY - rect.top};
+    const chart = chartGetter();
+    if (!chart || !chart.scales || !chart.scales.x) return;
+    const xVal1 = chart.scales.x.getValueForPixel(startPx.x);
+    const xVal2 = chart.scales.x.getValueForPixel(endPx.x);
+    const yVal1 = chart.scales.y.getValueForPixel(startPx.y);
+    const yVal2 = chart.scales.y.getValueForPixel(endPx.y);
+    const xlo = Math.min(xVal1, xVal2), xhi = Math.max(xVal1, xVal2);
+    const ylo = Math.min(yVal1, yVal2), yhi = Math.max(yVal1, yVal2);
+    let changed = false;
+    allPairedGetter().forEach(p => {
+      if (p.x >= xlo && p.x <= xhi && p.y >= ylo && p.y <= yhi) {
+        excludedTimestamps.add(p.t);
+        changed = true;
+      }
+    });
+    if (changed) onChange();
+  }
+
+  canvas.addEventListener('mousedown', down);
+  window.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', up);
+  canvas._boxHandlers = {down, move, up};
+}
+
+let map, markersLayer, scatterChart, tsChart, neighborAChart, neighborBChart, currentData;
+
+function isStale(lastSeenUnix) {
+  if (!lastSeenUnix) return true;
+  const seenDate = new Date(lastSeenUnix * 1000);
+  const now = new Date();
+  return seenDate.toISOString().slice(0, 10) !== now.toISOString().slice(0, 10);
+}
+
+async function loadView(view) {
+  document.getElementById('btn-day').classList.toggle('active', view === 'day');
+  document.getElementById('btn-week').classList.toggle('active', view === 'week');
+  const file = view === 'week' ? 'data/last7.json' : 'data/latest.json';
+  try {
+    const data = await fetch(file).then(r => r.json());
+    render(data, view);
+  } catch (e) {
+    document.getElementById('counts').innerHTML =
+      `<p style="grid-column:1/-1;color:var(--ink-soft)">No data yet for this view. Run ${view === 'week' ? 'backfill.py / rollup.py' : 'fetch_data.py + analyze.py'}.</p>`;
+    document.getElementById('window-label').textContent = '';
+  }
+}
+
+document.getElementById('btn-day').addEventListener('click', () => loadView('day'));
+document.getElementById('btn-week').addEventListener('click', () => loadView('week'));
+
+function render(data, view) {
+  currentData = data;
+  document.getElementById('generated-at').textContent = 'Generated ' + new Date(data.generated_at).toLocaleString();
+  document.getElementById('window-label').textContent = view === 'week'
+    ? `${data.window_start} → ${data.window_end} (${data.days_included.length} day${data.days_included.length !== 1 ? 's' : ''})`
+    : (data.date || '');
+
+  const counts = document.getElementById('counts');
+  counts.innerHTML = '';
+  ['OK','WARNING','FAULTY','OFFLINE'].forEach(s => {
+    const card = document.createElement('div');
+    card.className = 'count-card ' + s;
+    card.innerHTML = `<div class="n">${data.counts[s] ?? 0}</div><div class="label">${s}</div>`;
+    counts.appendChild(card);
+  });
+
+  renderMap(data.sensors);
+  renderTable(data.sensors);
+  document.getElementById('detail').classList.remove('open');
+}
+
+function renderMap(sensors) {
+  if (!map) {
+    map = L.map('map', {scrollWheelZoom:false}).setView([38.246, 21.735], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution:'&copy; OpenStreetMap contributors', maxZoom:18
+    }).addTo(map);
+    markersLayer = L.layerGroup().addTo(map);
+  }
+  markersLayer.clearLayers();
+  const bounds = [];
+  sensors.forEach(s => {
+    if (s.latitude == null || s.longitude == null) return;
+    const color = STATUS_COLOR[s.status] || '#999';
+    const marker = L.circleMarker([s.latitude, s.longitude], {
+      radius:8, color:color, fillColor:color, fillOpacity:0.85, weight:1.5
+    }).addTo(markersLayer);
+    marker.bindTooltip(`${s.name} — ${s.status}`);
+    marker.on('click', () => showDetail(s));
+    bounds.push([s.latitude, s.longitude]);
+  });
+  if (bounds.length) map.fitBounds(bounds, {padding:[30,30]});
+}
+
+function meanCell(m) {
+  if (!m || m.mean == null) return '—';
+  const a = m.mean_a != null ? m.mean_a.toFixed(1) : '—';
+  const b = m.mean_b != null ? m.mean_b.toFixed(1) : '—';
+  return `${m.mean.toFixed(1)} <span style="color:var(--ink-faint);">(A ${a}/B ${b})</span>`;
+}
+
+function fmt1(v) {
+  return typeof v === 'number' ? v.toFixed(1) : '—';
+}
+
+function fmt2(v) {
+  return typeof v === 'number' ? v.toFixed(2) : '—';
+}
+
+function renderTable(sensors) {
+  const order = {FAULTY:0, OFFLINE:1, WARNING:2, OK:3};
+  const sorted = [...sensors].sort((a,b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
+  const tbody = document.getElementById('table-body');
+  tbody.innerHTML = '';
+  sorted.forEach(s => {
+    const tr = document.createElement('tr');
+    const stale = isStale(s.last_seen);
+    const lastSeen = s.last_seen
+      ? new Date(s.last_seen * 1000).toLocaleString([], {month:'2-digit', day:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'})
+      : '—';
+    tr.innerHTML = `
+      <td><span class="status-pill ${s.status}">${s.status}</span></td>
+      <td>${s.name}</td>
+      <td class="num">${fmt2(s.stats.r2)}</td>
+      <td class="num">${fmt1(s.stats.slope)}</td>
+      <td class="num">${fmt1(s.stats.rmse)}</td>
+      <td class="num">${meanCell(s.mean_by_fraction?.pm1_0)}</td>
+      <td class="num">${meanCell(s.mean_by_fraction?.pm2_5)}</td>
+      <td class="num">${meanCell(s.mean_by_fraction?.pm10_0)}</td>
+      <td class="num">${s.completeness_pct}%</td>
+      <td class="num${stale ? ' stale' : ''}">${lastSeen}${stale ? ' ⚠' : ''}</td>
+    `;
+    tr.addEventListener('click', () => showDetail(s));
+    tbody.appendChild(tr);
+  });
+}
+
+function showDetail(s) {
+  const detail = document.getElementById('detail');
+  detail.classList.add('open');
+  document.getElementById('detail-name').textContent = s.name;
+  const pStats = s.stats_by_fraction ? s.stats_by_fraction.pm2_5 : s.stats;
+  const installed = s.date_created ? new Date(s.date_created * 1000).toLocaleDateString() : 'unknown';
+  document.getElementById('detail-sub').textContent =
+    `sensor_index=${s.sensor_index} · status=${s.status} · n_paired=${pStats.n_paired ?? 0} · rssi=${s.rssi ?? '—'} · installed ${installed}`;
+  const reasons = document.getElementById('detail-reasons');
+  reasons.innerHTML = '';
+  (s.reasons || []).forEach(r => {
+    const li = document.createElement('li'); li.textContent = r; reasons.appendChild(li);
+  });
+
+  window._currentSensor = s;
+  const fracSelect = document.getElementById('fraction-select');
+  fracSelect.onchange = () => renderDetailCharts(s, fracSelect.value);
+  renderDetailCharts(s, fracSelect.value);
+
+  detail.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+const FRACTION_LABEL = {pm1_0:'PM1.0', pm2_5:'PM2.5', pm10_0:'PM10'};
+
+function renderDetailCharts(s, fraction) {
+  const t = s.timeseries.timestamps || [];
+  const a = s.timeseries[`${fraction}_a`] || [];
+  const b = s.timeseries[`${fraction}_b`] || [];
+  const label = FRACTION_LABEL[fraction] || fraction;
+
+  if (scatterChart) scatterChart.destroy();
+  scatterChart = new Chart(document.getElementById('scatter-chart'), {
+    type: 'scatter',
+    data: { datasets: [{
+      label: 'A vs B', data: a.map((v,i) => ({x:v, y:b[i]})),
+      backgroundColor: STATUS_COLOR[s.status] || '#999', pointRadius: 3
+    }, {
+      label: '1:1 line', type:'line', showLine:true, pointRadius:0,
+      borderColor:'#999', borderDash:[4,4],
+      data: (() => { const m = Math.max(1, ...a, ...b); return [{x:0,y:0},{x:m,y:m}]; })()
+    }]},
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}, zoom: ZOOM_OPTS},
+      scales:{
+        x:{title:{display:true, text:`Channel A ${label} (ug/m3)`}},
+        y:{title:{display:true, text:`Channel B ${label} (ug/m3)`}}
+      }
+    }
+  });
+
+  if (tsChart) tsChart.destroy();
+  tsChart = new Chart(document.getElementById('ts-chart'), {
+    type:'line',
+    data:{
+      labels: t.map(ts => new Date(ts*1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})),
+      datasets:[
+        {label:'Channel A', data:a, borderColor:'#2f6d4f', borderWidth:1.5, pointRadius:0, tension:0.15},
+        {label:'Channel B', data:b, borderColor:'#8a5a12', borderWidth:1.5, pointRadius:0, tension:0.15}
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:true, labels:{boxWidth:10, font:{size:11}}}, zoom: ZOOM_OPTS},
+      scales:{ x:{ticks:{maxTicksLimit:8}}, y:{title:{display:true, text:`${label} (ug/m3)`}} }
+    }
+  });
+
+  renderNeighborCharts(s, fraction);
+}
+
+function renderNeighborCharts(s, fraction) {
+  const section = document.getElementById('neighbor-section');
+  const neighbors = (s.nearest_neighbors || [])
+    .map(n => (currentData.sensors || []).find(x => x.sensor_index === n.sensor_index))
+    .filter(Boolean);
+
+  if (!neighbors.length) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = 'block';
+
+  const label = FRACTION_LABEL[fraction] || fraction;
+  const sensorColors = ['#8a2f24', '#2f6d4f', '#1f6f91']; // this sensor, neighbor1, neighbor2
+  const allSensors = [
+    {sensor: s, label: `${s.name} (this sensor)`, color: sensorColors[0]},
+    ...neighbors.map((nb, i) => {
+      const meta = (s.nearest_neighbors || [])[i];
+      const tag = meta ? `${meta.distance_km}km · ${meta.status}` : 'nearby';
+      return {sensor: nb, label: `${nb.name} (${tag})`, color: sensorColors[i+1]};
+    })
+  ];
+
+  // Build sorted, paired [{x:time, a, b}] rows per sensor — sorting is what
+  // fixes the zig-zag connected-line bug from unordered API data.
+  function sortedRows(sensor) {
+    const t = sensor.timeseries.timestamps || [];
+    const a = sensor.timeseries[`${fraction}_a`] || [];
+    const b = sensor.timeseries[`${fraction}_b`] || [];
+    const rows = t.map((ts, i) => ({t: ts, a: a[i], b: b[i]}));
+    rows.sort((r1, r2) => r1.t - r2.t);
+    return rows;
+  }
+
+  // --- Chart 1: combined A & B time series, connected lines, all sensors ---
+  if (neighborAChart) neighborAChart.destroy();
+  const tsDatasets = [];
+  allSensors.forEach(({sensor, label: lbl, color}) => {
+    const rows = sortedRows(sensor);
+    tsDatasets.push({
+      label: `${lbl} — ch A`,
+      data: rows.filter(r => Number.isFinite(r.a)).map(r => ({x:r.t, y:r.a})),
+      borderColor: color, backgroundColor: color, borderWidth: 2,
+      pointRadius: 0, showLine: true, tension: 0.15
+    });
+    tsDatasets.push({
+      label: `${lbl} — ch B`,
+      data: rows.filter(r => Number.isFinite(r.b)).map(r => ({x:r.t, y:r.b})),
+      borderColor: color, backgroundColor: color, borderWidth: 1.5, borderDash:[5,3],
+      pointRadius: 0, showLine: true, tension: 0.15
+    });
+  });
+  neighborAChart = new Chart(document.getElementById('neighbor-ts-chart'), {
+    type: 'line',
+    data: {datasets: tsDatasets},
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:true, labels:{boxWidth:8, font:{size:9}}}, zoom: ZOOM_OPTS},
+      scales:{
+        x:{type:'linear', ticks:{
+          maxTicksLimit:6,
+          callback:(v) => new Date(v*1000).toLocaleString([], {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'})
+        }},
+        y:{title:{display:true, text:`${label} (ug/m3) — solid=A, dashed=B`}}
+      }
+    }
+  });
+
+  // --- Chart 2: cross-correlation explorer — pick ANY two channels among
+  // this sensor + its 2 nearest neighbors (any A or B, from any of the 3),
+  // matched only on timestamps both series actually share in common.
+  const seriesOptions = [];
+  allSensors.forEach(({sensor, label: lbl}) => {
+    const rows = sortedRows(sensor);
+    seriesOptions.push({
+      label: `${lbl} — ch A`,
+      rows: rows.filter(r => Number.isFinite(r.a)).map(r => ({t:r.t, v:r.a}))
+    });
+    seriesOptions.push({
+      label: `${lbl} — ch B`,
+      rows: rows.filter(r => Number.isFinite(r.b)).map(r => ({t:r.t, v:r.b}))
+    });
+  });
+
+  const xSelect = document.getElementById('corr-x-select');
+  const ySelect = document.getElementById('corr-y-select');
+  xSelect.innerHTML = '';
+  ySelect.innerHTML = '';
+  seriesOptions.forEach((opt, i) => {
+    const ox = document.createElement('option'); ox.value = i; ox.textContent = opt.label;
+    xSelect.appendChild(ox);
+    const oy = document.createElement('option'); oy.value = i; oy.textContent = opt.label;
+    ySelect.appendChild(oy);
+  });
+  xSelect.value = 0; // default: this sensor — ch A
+  ySelect.value = 1; // default: this sensor — ch B
+
+  let excludedTimestamps = new Set();
+  let corrBoxExcludeMode = false;
+  const boxToggleBtn = document.getElementById('corr-box-exclude-toggle');
+  boxToggleBtn.textContent = 'Box exclude: off';
+
+  function corrZoomOpts() {
+    if (!corrBoxExcludeMode) return ZOOM_OPTS;
+    return {
+      pan: {...ZOOM_OPTS.pan, enabled: false},
+      zoom: {...ZOOM_OPTS.zoom, drag: {...ZOOM_OPTS.zoom.drag, enabled: false}}
+    };
+  }
+
+  function linreg(xs, ys) {
+    const n = xs.length;
+    if (n < 2) return null;
+    const meanX = xs.reduce((a,b) => a+b, 0) / n, meanY = ys.reduce((a,b) => a+b, 0) / n;
+    let num = 0, den = 0;
+    for (let i = 0; i < n; i++) { num += (xs[i]-meanX)*(ys[i]-meanY); den += (xs[i]-meanX)**2; }
+    const slope = den === 0 ? 0 : num/den;
+    const intercept = meanY - slope*meanX;
+    let ssRes = 0, ssTot = 0;
+    for (let i = 0; i < n; i++) { const pred = slope*xs[i]+intercept; ssRes += (ys[i]-pred)**2; ssTot += (ys[i]-meanY)**2; }
+    const r2 = ssTot === 0 ? (ssRes === 0 ? 1 : 0) : 1 - ssRes/ssTot;
+    return {slope, intercept, r2, n};
+  }
+
+  function updateCorrChart() {
+    const xOpt = seriesOptions[Number(xSelect.value)];
+    const yOpt = seriesOptions[Number(ySelect.value)];
+    const yMap = new Map(yOpt.rows.map(r => [r.t, r.v]));
+    const allPaired = [];
+    xOpt.rows.forEach(r => { if (yMap.has(r.t)) allPaired.push({x:r.v, y:yMap.get(r.t), t:r.t}); });
+
+    const active = allPaired.filter(p => !excludedTimestamps.has(p.t));
+    const excluded = allPaired.filter(p => excludedTimestamps.has(p.t));
+
+    if (neighborBChart) neighborBChart.destroy();
+    let maxVal = 1;
+    allPaired.forEach(p => { maxVal = Math.max(maxVal, p.x, p.y); });
+
+    const stats = linreg(active.map(p => p.x), active.map(p => p.y));
+    const excludedNote = excluded.length ? ` · ${excluded.length} excluded` : '';
+    const hint = corrBoxExcludeMode ? ' · drag a box to exclude points' : ' · click a point to exclude it';
+    document.getElementById('corr-stats').textContent = stats
+      ? `n=${stats.n} common timestamps${excludedNote} · R²=${stats.r2.toFixed(3)} · slope=${stats.slope.toFixed(3)}${hint}`
+      : 'No overlapping timestamps between these two series';
+
+    neighborBChart = new Chart(document.getElementById('neighbor-corr-chart'), {
+      type: 'scatter',
+      data: { datasets: [
+        {label: `${xOpt.label} vs ${yOpt.label}`, data: active, backgroundColor:'#1f6f91', pointRadius:3, showLine:false},
+        {label: `Excluded (${excluded.length})`, data: excluded, backgroundColor:'rgba(139,138,130,0.4)', borderColor:'#8b8a82', pointStyle:'crossRot', pointRadius:5, showLine:false},
+        {label:'1:1 line', type:'line', showLine:true, pointRadius:0, borderColor:'#999', borderDash:[4,4], data:[{x:0,y:0},{x:maxVal,y:maxVal}]}
+      ]},
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        onClick: (evt, elements, chart) => {
+          if (corrBoxExcludeMode) return;
+          const hit = elements.find(el => el.datasetIndex === 0 || el.datasetIndex === 1);
+          if (!hit) return;
+          const point = chart.data.datasets[hit.datasetIndex].data[hit.index];
+          if (!point || point.t === undefined) return;
+          if (excludedTimestamps.has(point.t)) excludedTimestamps.delete(point.t);
+          else excludedTimestamps.add(point.t);
+          updateCorrChart();
+        },
+        plugins:{legend:{display:true, labels:{boxWidth:8, font:{size:9}}}, zoom: corrZoomOpts()},
+        scales:{
+          x:{title:{display:true, text:`${xOpt.label} (ug/m3)`}},
+          y:{title:{display:true, text:`${yOpt.label} (ug/m3)`}}
+        }
+      }
+    });
+
+    setupBoxExclude(
+      document.getElementById('neighbor-corr-chart'),
+      () => neighborBChart,
+      excludedTimestamps,
+      () => allPaired,
+      updateCorrChart,
+      () => corrBoxExcludeMode
+    );
+  }
+
+  function onPairChange() { excludedTimestamps.clear(); updateCorrChart(); }
+  document.getElementById('corr-clear-exclusions').onclick = () => { excludedTimestamps.clear(); updateCorrChart(); };
+  document.getElementById('corr-box-exclude-toggle').onclick = (e) => {
+    corrBoxExcludeMode = !corrBoxExcludeMode;
+    e.target.textContent = 'Box exclude: ' + (corrBoxExcludeMode ? 'on' : 'off');
+    updateCorrChart();
+  };
+
+  xSelect.onchange = onPairChange;
+  ySelect.onchange = onPairChange;
+  updateCorrChart();
+}
+
+loadView('day');
+</script>
+</body>
+</html>

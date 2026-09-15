@@ -1,0 +1,29 @@
+{
+  "bbox": {
+    "_comment": "Rough box around Patras + surroundings. Widen/narrow as needed.",
+    "nwlat": 38.35,
+    "nwlng": 21.6,
+    "selat": 38.2,
+    "selng": 21.8
+  },
+  "history": {
+    "average_minutes": 10,
+    "_comment": "PurpleAir 'average' param: 0=raw(~2min),10,30,60,360(6h),1440(1day)"
+  },
+  "thresholds": {
+    "offline_hours": 2,
+    "r2_warning": 0.90,
+    "r2_fault": 0.70,
+    "slope_warning_low": 0.85,
+    "slope_warning_high": 1.15,
+    "slope_fault_low": 0.5,
+    "slope_fault_high": 2.0,
+    "min_paired_points": 20,
+    "_comment": "min_paired_points = minimum simultaneous A&B readings required to trust the regression for that day"
+  },
+  "output": {
+    "raw_dir": "data/raw",
+    "results_dir": "data/results",
+    "site_data_dir": "site/data"
+  }
+}
