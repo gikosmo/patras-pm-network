@@ -7,8 +7,8 @@ on:
     - cron: "0 4 * * *"
   workflow_dispatch:
     inputs:
-      date:
-        description: "Date to analyze (YYYY-MM-DD). Leave blank for yesterday (UTC)."
+      end_date:
+        description: "Last day to include (YYYY-MM-DD). Leave blank for yesterday (UTC) — pulls that day and the 6 before it."
         required: false
         default: ""
 
@@ -30,13 +30,10 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Fetch data
+      - name: Run 7-day backfill (fetch + analyze + rollup)
         env:
           PURPLEAIR_API_KEY: ${{ secrets.PURPLEAIR_API_KEY }}
-        run: python scripts/fetch_data.py "${{ github.event.inputs.date }}"
-
-      - name: Analyze
-        run: python scripts/analyze.py "${{ github.event.inputs.date }}"
+        run: python scripts/backfill.py --days 7 --end "${{ github.event.inputs.end_date }}"
 
       - name: Commit updated data + site
         run: |
