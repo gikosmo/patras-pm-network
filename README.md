@@ -1,4 +1,4 @@
-# Patras PM network — PurpleAir sensor QC agent
+# Patras PM network — PurpleAir sensor QC
 
 Downloads daily PM2.5 data for every PurpleAir sensor in the Patras network,
 checks each sensor's two internal channels (A and B) against each other with
