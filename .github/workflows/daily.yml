@@ -35,6 +35,13 @@ jobs:
           PURPLEAIR_API_KEY: ${{ secrets.PURPLEAIR_API_KEY }}
         run: python scripts/backfill.py --days 7 --end "${{ github.event.inputs.end_date }}"
 
+        
+      - name: Record dashboard URL
+        run: |
+          mkdir -p data/results/$(date -u +%Y-%m-%d)
+          echo "https://gikosmo.github.io/patras-pm-network/" > data/results/$(date -u +%Y-%m-%d)/dashboard_url.txt
+
+
       - name: Commit updated data + site
         run: |
           git config user.name "purpleair-qc-bot"
