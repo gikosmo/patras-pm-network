@@ -2,8 +2,9 @@ name: Daily PurpleAir QC run
 
 on:
   schedule:
-    # 07:00 UTC daily = after the previous full UTC day has closed out.
-    # Adjust to your preference; Patras is UTC+2/+3.
+    # 07:07 UTC daily (shifted off the hour to avoid GitHub's top-of-hour
+    # scheduling congestion) = after the previous full UTC day has closed
+    # out. Adjust to your preference; Patras is UTC+2/+3.
     - cron: "7 7 * * *"
   workflow_dispatch:
     inputs:
@@ -35,18 +36,11 @@ jobs:
           PURPLEAIR_API_KEY: ${{ secrets.PURPLEAIR_API_KEY }}
         run: python scripts/backfill.py --days 7 --end "${{ github.event.inputs.end_date }}"
 
-        
-      - name: Record dashboard URL
-        run: |
-          mkdir -p data/results/$(date -u +%Y-%m-%d)
-          echo "https://gikosmo.github.io/patras-pm-network/" > data/results/$(date -u +%Y-%m-%d)/dashboard_url.txt
-
-
-      - name: Commit updated data + site
+      - name: Commit updated site data
         run: |
           git config user.name "purpleair-qc-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add site/data data/results
+          git add site/data
           git diff --staged --quiet || git commit -m "Daily QC run: $(date -u +%Y-%m-%d)"
           git push
 
