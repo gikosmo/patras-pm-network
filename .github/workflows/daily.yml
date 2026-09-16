@@ -4,7 +4,7 @@ on:
   schedule:
     # 07:00 UTC daily = after the previous full UTC day has closed out.
     # Adjust to your preference; Patras is UTC+2/+3.
-    - cron: "0 7 * * *"
+    - cron: "7 7 * * *"
   workflow_dispatch:
     inputs:
       end_date:
