@@ -90,7 +90,7 @@ def _get(path: str, params: dict, retries: int = 3, backoff: float = 2.0) -> dic
     raise PurpleAirError(f"Failed to GET {url} after {retries} attempts: {last_exc}")
 
 
-def get_sensors_in_bbox(bbox: dict, fields: Iterable[str] = SENSOR_LIST_FIELDS) -> list[dict]:
+def get_sensors_in_bbox(bbox: dict, fields: Iterable[str] = SENSOR_LIST_FIELDS, max_age: int = 15552000) -> list[dict]:
     """
     Return current snapshot metadata for every sensor whose location falls
     inside the given bounding box. bbox = {"nwlat":..,"nwlng":..,"selat":..,"selng":..}
@@ -102,6 +102,7 @@ def get_sensors_in_bbox(bbox: dict, fields: Iterable[str] = SENSOR_LIST_FIELDS) 
         "selat": bbox["selat"],
         "selng": bbox["selng"],
         "location_type": 0,  # outdoor sensors only; drop this line to include indoor
+         "max_age": max_age,
     }
     payload = _get("sensors", params)
     field_names = payload["fields"]

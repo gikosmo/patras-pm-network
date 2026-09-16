@@ -35,7 +35,8 @@ def main(date_str: str | None = None):
     out_dir = ROOT / CONFIG["output"]["raw_dir"] / resolved_date
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    sensors = get_sensors_in_bbox(CONFIG["bbox"])
+    max_age_seconds = CONFIG.get("sensor_list_max_age_days", 180) * 86400
+    sensors = get_sensors_in_bbox(CONFIG["bbox"], max_age=max_age_seconds)
     if not sensors:
         log.warning("No sensors found in bounding box — check config.json bbox.")
         return

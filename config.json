@@ -21,6 +21,7 @@
     "min_paired_points": 20,
     "_comment": "min_paired_points = minimum simultaneous A&B readings required to trust the regression for that day"
   },
+  "sensor_list_max_age_days": 180,
   "output": {
     "raw_dir": "data/raw",
     "results_dir": "data/results",
